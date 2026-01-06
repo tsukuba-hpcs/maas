@@ -842,10 +842,7 @@ class MachineHandler(NodeHandler, WorkloadAnnotationsMixin, PowerMixin):
                         "Can't allocate a machine belonging to another user."
                     )
                 maaslog.info(
-                    "Request from user %s to acquire machine: %s (%s)",
-                    request.user.username,
-                    machine.fqdn,
-                    machine.system_id,
+                    f"Request from user {request.user.username} to acquire machine: {machine.fqdn} ({machine.system_id})"
                 )
                 machine.acquire(
                     request.user,
@@ -1553,9 +1550,7 @@ class MachineHandler(NodeHandler, WorkloadAnnotationsMixin, PowerMixin):
         )
         node.mark_fixed(request.user, comment)
         maaslog.info(
-            "%s: User %s marked node as fixed",
-            node.hostname,
-            request.user.username,
+            f"{node.hostname}: User {request.user.username} marked node as fixed"
         )
         return node
 
@@ -1590,9 +1585,7 @@ class MachineHandler(NodeHandler, WorkloadAnnotationsMixin, PowerMixin):
         )
         machine.start_rescue_mode(request.user)
         maaslog.info(
-            "%s: User %s started rescue mode.",
-            machine.hostname,
-            request.user.username,
+            f"{machine.hostname}: User {request.user.username} started rescue mode."
         )
         return machine
 
@@ -1627,9 +1620,7 @@ class MachineHandler(NodeHandler, WorkloadAnnotationsMixin, PowerMixin):
         )
         machine.stop_rescue_mode(request.user)
         maaslog.info(
-            "%s: User %s stopped rescue mode.",
-            machine.hostname,
-            request.user.username,
+            f"{machine.hostname}: User {request.user.username} stopped rescue mode."
         )
         return machine
 
@@ -1768,7 +1759,7 @@ def create_machine(request, requires_arch=False):
     )
     if form.is_valid():
         machine = form.save()
-        maaslog.info("%s: Enlisted new machine", machine.hostname)
+        maaslog.info(f"{machine.hostname}: Enlisted new machine")
         return machine
     else:
         raise MAASAPIValidationError(form.errors)
@@ -1822,12 +1813,11 @@ class AnonMachinesHandler(AnonNodesHandler):
         if form.is_valid():
             if machine.status == NODE_STATUS.NEW:
                 maaslog.info(
-                    "%s: Found existing machine, enlisting", machine.hostname
+                    f"{machine.hostname}: Found existing machine, enlisting"
                 )
             else:
                 maaslog.info(
-                    "%s: Found existing machine, commissioning",
-                    machine.hostname,
+                    f"{machine.hostname}: Found existing machine, commissioning"
                 )
             return form.save()
         else:
@@ -1917,11 +1907,7 @@ class AnonMachinesHandler(AnonNodesHandler):
             ).first()
             if machine is not None:
                 maaslog.info(
-                    "Updating %s, with %s, %s, %s",
-                    machine,
-                    architecture,
-                    power_type,
-                    params.get("power_address", ""),
+                    f"Updating {machine}, with {architecture}, {power_type}, {params.get('power_address', '')}"
                 )
                 machine = self._update_new_node(
                     machine, architecture, power_type, power_parameters
@@ -2560,9 +2546,7 @@ class MachinesHandler(NodesHandler, PowersMixin):
             param for param in request.data.lists() if param[0] != "op"
         ]
         maaslog.info(
-            "Request from user %s to acquire a machine with constraints: %s",
-            request.user.username,
-            str(input_constraints),
+            f"Request from user {request.user.username} to acquire a machine with constraints: {str(input_constraints)}"
         )
         options = get_allocation_options(request)
         verbose = get_optional_param(
