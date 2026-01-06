@@ -6656,7 +6656,19 @@ class Node(CleanSave, TimestampedModel):
                             script_result_status=SCRIPT_STATUS.FAILED,
                         )
 
-                deferToDatabase(mark_node_failed)
+                def eb_mark_failed_error(f):
+                    """Log error if database update fails."""
+                    maaslog.error(
+                        "%s: Failed to mark node as failed in database: %s",
+                        self.hostname,
+                        f.getErrorMessage(),
+                    )
+                    return failure  # Return original failure
+
+                d = deferToDatabase(mark_node_failed)
+                d.addCallback(lambda _: failure)  # Return original failure on success
+                d.addErrback(eb_mark_failed_error)  # Log and return original failure on error
+                return d
 
             return failure  # Re-raise the failure
 
