@@ -151,6 +151,7 @@ class DevVersionsInfo:
     install_type = CONTROLLER_INSTALL_TYPE.UNKNOWN
 
     version: str
+    update: Optional[str] = None
 
     @property
     def current(self):
