@@ -8,6 +8,11 @@ export PYBUILD_SYSTEM=pyproject
 %:
 	dh $@ --with python3,apport --buildsystem=pybuild
 
+override_dh_auto_configure:
+	# Replace symlinks with actual files for wheel building
+	find $(CURDIR)/src -type l -name "*.py" -exec sh -c 'cp --remove-destination "$$(readlink -f "{}")" "{}"' \;
+	dh_auto_configure
+
 override_dh_auto_test:
 	# do nothing as we don't want the tests to run because they require
 	# internet access
