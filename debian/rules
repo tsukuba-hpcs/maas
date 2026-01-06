@@ -63,4 +63,4 @@ override_dh_dwz:
 override_dh_auto_clean:
 	dh_auto_clean
 	rm -rf $(BUILDHOME)
-	rm -rf src/*.egg-info
+	rm -rf src/*.egg-info src/*.dist-info
