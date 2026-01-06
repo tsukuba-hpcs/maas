@@ -948,3 +948,34 @@ class TestCommissionForm(MAASServerTestCase):
             testing_scripts=["none"],
             script_input={},
         )
+
+    def test_commission_requires_network_interface_for_non_ipmi(self):
+        node = factory.make_Node(
+            status=NODE_STATUS.READY,
+            power_state=POWER_STATE.OFF,
+            power_type="manual",
+            interface=False,
+        )
+        user = factory.make_admin()
+        form = CommissionForm(instance=node, user=user, data={})
+        self.assertFalse(form.is_valid())
+        self.assertEqual(
+            {
+                "__all__": [
+                    "Commission requires at least one network interface. "
+                    "Please add a MAC address or use power_type='ipmi'."
+                ]
+            },
+            form.errors,
+        )
+
+    def test_commission_allows_no_interface_for_ipmi(self):
+        node = factory.make_Node(
+            status=NODE_STATUS.READY,
+            power_state=POWER_STATE.OFF,
+            power_type="ipmi",
+            interface=False,
+        )
+        user = factory.make_admin()
+        form = CommissionForm(instance=node, user=user, data={})
+        self.assertTrue(form.is_valid(), form.errors)

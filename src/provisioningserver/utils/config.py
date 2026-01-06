@@ -99,10 +99,10 @@ class UUIDString(formencode.FancyValidator):
         else:
             try:
                 uuid.UUID(value)
-            except Exception:
-                raise formencode.Invalid(  # noqa: B904
+            except ValueError as e:
+                raise formencode.Invalid(
                     self.message("notUUID", state, value=value), value, state
-                )
+                ) from e
             else:
                 return value
 

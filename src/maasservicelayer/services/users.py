@@ -244,8 +244,8 @@ class UsersService(BaseService[User, UsersRepository, UserBuilder]):
         )
 
         owned_resources = {
-            "Static IP address(es)": has_ipranges,
-            "IP range(s)": has_staticips,
+            "IP range(s)": has_ipranges,
+            "Static IP address(es)": has_staticips,
             "Node(s)": has_nodes,
         }
         if any(owned_resources.values()):

@@ -27,7 +27,7 @@ def convert_tuple_to_string(creds_tuple):
 
 def convert_string_to_tuple(creds_string):
     """Recreate a MAAS API credentials tuple from a colon-separated string."""
-    creds_tuple = tuple(creds_string.split(":"))
+    creds_tuple = tuple(creds_string.split(":", 2))
     if len(creds_tuple) != 3:
         raise ValueError(
             "Malformed credentials string.  Expected 3 colon-separated items, "

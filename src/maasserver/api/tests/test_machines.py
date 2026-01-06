@@ -435,6 +435,91 @@ class TestMachinesAPI(APITestCase.ForUser):
         parsed_result = response.json()
         self.assertEqual(NODE_STATUS.NEW, parsed_result["status"])
 
+    def test_POST_commission_validation_error_returns_bad_request(self):
+        # Test that CommissionForm validation errors return 400 status.
+        # Bug fix: Previously, validation errors were not properly handled
+        # and could result in unclear error responses. Now MAASAPIValidationError
+        # is raised with form.errors when validation fails.
+        self.become_admin()
+        make_usable_osystem(self)
+        response = self.client.post(
+            self.machines_url,
+            {
+                "architecture": make_usable_architecture(self),
+                "mac_addresses": ["aa:bb:cc:dd:ee:ff"],
+                "power_type": "manual",
+                "commission": True,
+                "commissioning_scripts": ["non_existent_script"],
+            },
+        )
+        self.assertEqual(http.client.BAD_REQUEST, response.status_code)
+
+    def test_POST_commission_validation_error_includes_form_errors(self):
+        # Test that CommissionForm validation errors include form.errors in response.
+        # Bug fix: Ensures that when CommissionForm validation fails, the response
+        # contains detailed error information from form.errors to help users
+        # understand what went wrong.
+        self.become_admin()
+        make_usable_osystem(self)
+        response = self.client.post(
+            self.machines_url,
+            {
+                "architecture": make_usable_architecture(self),
+                "mac_addresses": ["aa:bb:cc:dd:ee:ff"],
+                "power_type": "manual",
+                "commission": True,
+                "commissioning_scripts": ["invalid_script_name"],
+            },
+        )
+        self.assertEqual(http.client.BAD_REQUEST, response.status_code)
+        parsed_result = json.loads(
+            response.content.decode(settings.DEFAULT_CHARSET)
+        )
+        # Verify that form errors are included in the response
+        self.assertIn("commissioning_scripts", parsed_result)
+        self.assertIsInstance(parsed_result["commissioning_scripts"], list)
+        self.assertTrue(len(parsed_result["commissioning_scripts"]) > 0)
+
+    def test_POST_commission_and_deployed_conflict_error(self):
+        # Test that specifying both commission=true and deployed=true returns error.
+        self.become_admin()
+        make_usable_osystem(self)
+        response = self.client.post(
+            self.machines_url,
+            {
+                "architecture": make_usable_architecture(self),
+                "mac_addresses": ["aa:bb:cc:dd:ee:ff"],
+                "power_type": "manual",
+                "commission": True,
+                "deployed": True,
+            },
+        )
+        self.assertEqual(http.client.BAD_REQUEST, response.status_code)
+        parsed_result = json.loads(
+            response.content.decode(settings.DEFAULT_CHARSET)
+        )
+        self.assertIn("commission", str(parsed_result).lower())
+        self.assertIn("deployed", str(parsed_result).lower())
+
+    def test_POST_commission_non_admin_error(self):
+        # Test that non-admin users cannot commission machines.
+        # Do not become admin - stay as regular user
+        make_usable_osystem(self)
+        response = self.client.post(
+            self.machines_url,
+            {
+                "architecture": make_usable_architecture(self),
+                "mac_addresses": ["aa:bb:cc:dd:ee:ff"],
+                "power_type": "manual",
+                "commission": True,
+            },
+        )
+        self.assertEqual(http.client.BAD_REQUEST, response.status_code)
+        parsed_result = json.loads(
+            response.content.decode(settings.DEFAULT_CHARSET)
+        )
+        self.assertIn("administrator", str(parsed_result).lower())
+
     def test_GET_lists_machines(self):
         # The api allows for fetching the list of Machines.
         machine1 = factory.make_Node()

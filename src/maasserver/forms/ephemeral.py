@@ -53,8 +53,9 @@ class ScriptForm(Form):
     def clean(self):
         if not self._is_actionable():
             raise ValidationError(
-                f"{self.display} is not available because "
-                "of the current state of the node."
+                f"{self.display} is not available for node {self.instance.system_id} "
+                f"in status '{self.instance.status_name}'. "
+                "Check node status and permissions."
             )
         return super().clean()
 
@@ -216,6 +217,11 @@ class ScriptForm(Form):
 
     def _get_interface_choices(self):
         choices = [("all", "all")]
+
+        # Null safety check for race condition during bulk operations
+        if self.instance.current_config is None:
+            return choices
+
         for interface in self.instance.current_config.interface_set.filter(
             children_relationships=None
         ):
@@ -293,15 +299,27 @@ class CommissionForm(TestForm):
     skip_networking = BooleanField(required=False, initial=False)
     skip_storage = BooleanField(required=False, initial=False)
 
+    def clean(self):
+        # Check for network interface requirement before general actionability check
+        # Null safety check for race condition during bulk operations
+        if self.instance.current_config is not None:
+            if not self.instance.current_config.interface_set.exists():
+                if self.instance.power_type != "ipmi":
+                    raise ValidationError(
+                        "Commission requires at least one network interface. "
+                        "Please add a MAC address or use power_type='ipmi'."
+                    )
+        return super().clean()
+
     def save(self):
         enable_ssh = self.cleaned_data.get("enable_ssh", False)
         skip_bmc_config = self.cleaned_data.get("skip_bmc_config", False)
         skip_networking = self.cleaned_data.get("skip_networking", False)
         skip_storage = self.cleaned_data.get("skip_storage", False)
-        commissioning_scripts = self.cleaned_data.get("commissioning_scripts")
-        testing_scripts = self.cleaned_data.get("testing_scripts")
+        commissioning_scripts = self.cleaned_data.get("commissioning_scripts") or []
+        testing_scripts = self.cleaned_data.get("testing_scripts") or []
         params = self.get_script_param_dict(
-            commissioning_scripts + testing_scripts
+            list(commissioning_scripts) + list(testing_scripts)
         )
         self.instance.start_commissioning(
             self.user,

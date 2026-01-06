@@ -602,7 +602,7 @@ class ExternalOAuthService(
 
     @Service.from_cache_or_execute(attr="httpx_client")
     async def get_httpx_client(self) -> AsyncClient:
-        return AsyncClient()
+        return AsyncClient(timeout=30.0)
 
     async def update_provider(
         self, id: int, builder: OAuthProviderBuilder

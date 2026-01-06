@@ -387,14 +387,28 @@ class BMC(CleanSave, TimestampedModel):
 
     def set_random_name(self):
         """Set a random `name`."""
-        while True:
+        max_attempts = 100
+        for attempt in range(max_attempts):
             self.name = petname.Generate(2, "-")
             try:
                 self.save()
+                return
             except ValidationError:
-                pass
-            else:
-                break
+                if attempt >= max_attempts - 1:
+                    maaslog.error(
+                        "%s: Failed to generate unique BMC name after %d attempts",
+                        self,
+                        max_attempts,
+                    )
+                    raise ValidationError(
+                        f"Failed to generate unique BMC name after {max_attempts} attempts"
+                    )
+                maaslog.warning(
+                    "%s: BMC name collision on attempt %d/%d, retrying with a new name",
+                    self,
+                    attempt + 1,
+                    max_attempts,
+                )
 
     def get_power_parameters(self):
         from maasserver.secrets import SecretManager

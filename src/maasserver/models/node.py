@@ -2438,7 +2438,7 @@ class Node(CleanSave, TimestampedModel):
                 result = b"INFO: BMC detection not supported on S390X"
             else:
                 result = (
-                    "INFO: User %s (%s) has choosen to skip BMC configuration "
+                    "INFO: User %s (%s) has chosen to skip BMC configuration "
                     "during commissioning\n" % (user.get_username(), user.id)
                 ).encode()
             for script_result in commis_script_set.scriptresult_set.filter(

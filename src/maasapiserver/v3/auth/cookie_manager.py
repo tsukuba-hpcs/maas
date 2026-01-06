@@ -47,6 +47,7 @@ class EncryptedCookieManager:
             max_age=self.ttl_seconds,
             httponly=True,
             secure=True,
+            samesite="Lax",
         )
 
     def set_cookie(self, key: str, value: str, **opts) -> None:

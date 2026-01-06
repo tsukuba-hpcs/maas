@@ -296,8 +296,8 @@ class Notification(CleanSave, TimestampedModel):
         # doing any of this if we cannot relate the message.
         try:
             self.render()
-        except Exception:
-            raise ValidationError("Notification cannot be rendered.")  # noqa: B904
+        except Exception as e:
+            raise ValidationError("Notification cannot be rendered.") from e
 
     def __repr__(self):
         username = "None" if self.user is None else repr(self.user.username)

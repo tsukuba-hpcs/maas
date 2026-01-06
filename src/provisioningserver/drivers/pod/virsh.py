@@ -1114,8 +1114,10 @@ class VirshSSH(pexpect.spawn):
             try:
                 self.delete_local_volume(pool, volume)
             except Exception:
-                # Ignore any exception trying to cleanup.
-                pass
+                # Log cleanup failures but continue with remaining volumes.
+                maaslog.warning(
+                    f"Failed to cleanup disk volume {volume} in pool {pool}"
+                )
 
     def get_block_name_from_idx(self, idx):
         """Calculate a block name based on the `idx`.

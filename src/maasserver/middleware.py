@@ -261,6 +261,8 @@ class DebuggingLoggerMiddleware:
                 else pformat(request.GET)
             )
         except Exception:
+            # Debug logging is intentionally omitted here to avoid log spam
+            # during error handling of malformed requests
             get = "<could not parse>"
         try:
             post = (
@@ -269,6 +271,8 @@ class DebuggingLoggerMiddleware:
                 else pformat(request.POST)
             )
         except Exception:
+            # Debug logging is intentionally omitted here to avoid log spam
+            # during error handling of malformed requests
             post = "<could not parse>"
         try:
             cookies = (
@@ -277,6 +281,8 @@ class DebuggingLoggerMiddleware:
                 else pformat(request.COOKIES)
             )
         except Exception:
+            # Debug logging is intentionally omitted here to avoid log spam
+            # during error handling of malformed requests
             cookies = "<could not parse>"
         try:
             meta = (
@@ -285,6 +291,8 @@ class DebuggingLoggerMiddleware:
                 else pformat(request.META)
             )
         except Exception:
+            # Debug logging is intentionally omitted here to avoid log spam
+            # during error handling of malformed requests
             meta = "<could not parse>"
         path = path_override if path_override is not None else request.path
         name = request.__class__.__name__

@@ -8,6 +8,7 @@ setting.
 
 from copy import deepcopy
 from datetime import datetime, timezone
+import logging
 import os
 import shutil
 import sys
@@ -19,6 +20,8 @@ from provisioningserver.utils.isc import (
     make_isc_string,
     parse_isc_string,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def add_arguments(parser):
@@ -192,6 +195,7 @@ def run(args, stdout=sys.stdout, stderr=sys.stderr):
             remove_forwards_dnssec,
         )
     except ValueError as exc:
+        logger.error(f"DNS configuration update failed: {exc}")
         stderr.write(str(exc))
         stderr.write("\n")
         stderr.flush()

@@ -592,9 +592,16 @@ class MachineHandler(NodeHandler):
             # Start the commissioning process right away, which has the
             # desired side effect of initializing the node's power state.
             d = machine.start_commissioning(self.user)
-            # Silently ignore errors to prevent tracebacks. The commissioning
-            # callbacks have their own logging. This fixes LP1600328.
-            d.addErrback(lambda _: None)
+            # Log commissioning failures instead of silently ignoring them.
+            # This fixes LP1600328 while maintaining proper error visibility.
+            def _log_commission_failure(failure):
+                log.error(
+                    "Commissioning failed for %s: %s",
+                    machine.system_id,
+                    failure.getErrorMessage(),
+                )
+                return None
+            d.addErrback(_log_commission_failure)
 
         return data
 

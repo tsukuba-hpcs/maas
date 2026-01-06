@@ -72,7 +72,8 @@ class StorageLayoutBase(Form):
         for bd in self.node.current_config.blockdevice_set.all():
             try:
                 physical_bds.append(bd.physicalblockdevice)
-            except Exception:
+            except AttributeError:
+                # Block device is not a PhysicalBlockDevice
                 pass
         return sorted(physical_bds, key=attrgetter("id"))
 

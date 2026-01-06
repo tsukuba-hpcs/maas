@@ -834,7 +834,7 @@ def is_dev_environment():
     """Is this the development environment, or production?"""
     try:
         from maastesting import dev_root  # noqa
-    except Exception:
+    except ImportError:
         return False
     else:
         return True

@@ -201,8 +201,8 @@ class NodeDeviceHandler(OperationsHandler):
                         node_config=node_config,
                         pci_address=id,
                     )
-            except Exception:
-                raise MAASAPIValidationError("Invalid id format!")  # noqa: B904
+            except (ValueError, TypeError) as e:
+                raise MAASAPIValidationError("Invalid id format!") from e
 
     def read(self, request, system_id, id):
         """@description-title Return a specific node device

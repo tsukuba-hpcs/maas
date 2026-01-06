@@ -2097,15 +2097,30 @@ class MachinesHandler(NodesHandler, PowersMixin):
         deployed = get_optional_param(
             request.data, "deployed", default=False, validator=StringBool
         )
+
+        # Validate conflicting parameters: commission + deployed
+        if commission and deployed:
+            raise MAASAPIValidationError(
+                "Cannot specify both 'commission=true' and 'deployed=true'. "
+                "Deployed machines cannot be commissioned."
+            )
+
+        # Validate permission for commissioning
+        if commission and not request.user.is_superuser:
+            raise MAASAPIValidationError(
+                "Only administrators can commission machines. "
+                "Either set 'commission=false' or contact an administrator."
+            )
+
         machine = create_machine(request)
-        if request.user.is_superuser and commission and not deployed:
+        if commission and not deployed:
             form = CommissionForm(
                 instance=machine, user=request.user, data=request.data
             )
-            # Silently ignore errors to prevent 500 errors. The commissioning
-            # callbacks have their own logging. This fixes LP:1600328.
             if form.is_valid():
                 machine = form.save()
+            else:
+                raise MAASAPIValidationError(form.errors)
 
         return machine
 

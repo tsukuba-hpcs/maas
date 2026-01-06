@@ -240,9 +240,14 @@ def commission_node(system_id, user):
         raise NoSuchNode.from_system_id(system_id)  # noqa: B904
     try:
         node.start_commissioning(User.objects.get(username=user))
+    except User.DoesNotExist:
+        raise CommissionNodeFailed(f"User '{user}' not found")  # noqa: B904
+    except ValidationError as e:
+        raise CommissionNodeFailed(f"Validation failed: {e}")  # noqa: B904
     except Exception as e:
+        # Preserve exception type information for debugging
         # Cluster takes care of logging
-        raise CommissionNodeFailed(e)  # noqa: B904
+        raise CommissionNodeFailed(f"{type(e).__name__}: {e}")  # noqa: B904
 
 
 @synchronous

@@ -548,7 +548,7 @@ def make_maas_user_agent_request():
         )
     except Exception:
         # Do not fail if for any reason requests does.
-        pass
+        log.debug("Failed to send stats request to stats.images.maas.io")
 
 
 # How often the import service runs.

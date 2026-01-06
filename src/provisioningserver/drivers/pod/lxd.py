@@ -585,7 +585,8 @@ class LXDPodDriver(PodDriver):
                 pool.volumes.get("custom", source).delete()
             except Exception:
                 maaslog.warning(
-                    f"Pod {pod_id}: failed to delete volume {source} in pool {pool_name}"
+                    f"Pod {pod_id}: failed to delete volume {source} in pool {pool_name}",
+                    exc_info=True
                 )
 
     def _ensure_project(self, client):

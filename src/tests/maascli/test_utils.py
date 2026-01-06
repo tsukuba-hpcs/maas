@@ -198,6 +198,14 @@ class TestIsResponseTextual:
         assert utils.is_response_textual(sentinel.response) == is_textual
         grct.assert_called_once_with(sentinel.response)
 
+    def test_returns_false_when_no_content_type(self, mocker):
+        # Content-Typeヘッダーがない場合のテスト
+        grct = mocker.patch.object(
+            utils, "get_response_content_type", return_value=None
+        )
+        assert utils.is_response_textual(sentinel.response) is False
+        grct.assert_called_once_with(sentinel.response)
+
 
 class TestPrintResponseHeaders(MAASTestCase):
     """Tests for `print_response_headers`."""

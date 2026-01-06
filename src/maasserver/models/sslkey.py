@@ -29,13 +29,13 @@ def validate_ssl_key(value):
     """Validate that the given value contains a valid SSL key."""
     try:
         crypto.load_certificate(crypto.FILETYPE_PEM, value)
-    except Exception:
+    except Exception as e:
         # crypto.load_certificate raises all sorts of exceptions.
         # Here, we catch them all and return a ValidationError since this
         # method only aims at validating keys and not return the exact cause of
         # the failure.
         logger.error("Invalid SSL key.")
-        raise ValidationError("Invalid SSL key.")  # noqa: B904
+        raise ValidationError("Invalid SSL key.") from e
 
 
 class SSLKey(CleanSave, TimestampedModel):

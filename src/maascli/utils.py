@@ -128,6 +128,8 @@ def get_response_content_type(response):
 def is_response_textual(response):
     """Is the response body text?"""
     content_type = get_response_content_type(response)
+    if content_type is None:
+        return False
     return content_type.endswith("/json") or content_type.startswith("text/")
 
 
@@ -183,11 +185,10 @@ def print_response_content(response, content, file=None):
         file.write(b"Success.\n")
         file.write(b"Machine-readable output follows:\n")
     file.write(content)
+    # TTY有無に関わらずエラー時はstderrに出力
+    if not success and not content:
+        sys.stderr.write(f"Request failed with code {response.status}: {response.reason}\n")
     if is_tty and is_textual:
-        if not success and not content:
-            file.write(
-                f"Request failed with code {response.status}: {response.reason}".encode()
-            )
         file.write(b"\n")
 
 

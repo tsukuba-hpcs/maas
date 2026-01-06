@@ -4,11 +4,14 @@
 """Entrypoint for the maas regiond service."""
 
 import argparse
+import logging
 import os
 import signal
 import sys
 
 from maascommon.worker import set_max_workers_count
+
+logger = logging.getLogger(__name__)
 
 # Set the default so on installed system running regiond directly just works.
 os.environ.setdefault(
@@ -95,6 +98,10 @@ def run():
             with RegionConfiguration.open() as config:
                 worker_count = config.num_workers
         except Exception:
+            logger.warning(
+                "Failed to read worker count from configuration, "
+                "using default value of 4"
+            )
             worker_count = 4
     if worker_count <= 0:
         raise ValueError("Number of workers must be greater than zero.")

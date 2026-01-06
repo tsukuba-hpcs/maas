@@ -81,8 +81,11 @@ from provisioningserver.drivers.pod import (
 )
 from provisioningserver.drivers.power.registry import sanitise_power_parameters
 from provisioningserver.enum import MACVLAN_MODE, MACVLAN_MODE_CHOICES
+from provisioningserver.logger import get_maas_logger
 from provisioningserver.utils.network import get_ifname_for_label
 from provisioningserver.utils.twisted import asynchronous
+
+podlog = get_maas_logger("pod")
 
 DEFAULT_COMPOSED_CORES = 1
 # Size is in MB
@@ -783,7 +786,7 @@ class ComposeMachineForPodsForm(forms.Form):
             for form in self.valid_pod_forms
             if Capabilities.OVER_COMMIT in form.pod.capabilities
         ]
-        # XXX - we need a way to get errors back from these forms for debugging
+        last_exception = None
         # First, try to compose a machine from non-commitable pods.
         for form in non_commit_forms:
             try:
@@ -791,7 +794,13 @@ class ComposeMachineForPodsForm(forms.Form):
                     skip_commissioning=True,
                     dynamic=True,
                 )
-            except Exception:
+            except Exception as e:
+                podlog.error(
+                    "Failed to compose machine on pod %s: %s",
+                    form.pod.name,
+                    e,
+                )
+                last_exception = e
                 continue
         # Second, try to compose a machine from commitable pods
         for form in commit_forms:
@@ -800,9 +809,20 @@ class ComposeMachineForPodsForm(forms.Form):
                     skip_commissioning=True,
                     dynamic=True,
                 )
-            except Exception:
+            except Exception as e:
+                podlog.error(
+                    "Failed to compose machine on pod %s: %s",
+                    form.pod.name,
+                    e,
+                )
+                last_exception = e
                 continue
-        # No machine found.
+        # No machine found, log the last error for debugging
+        if last_exception:
+            podlog.error(
+                "All pod compose attempts failed. Last error: %s",
+                last_exception,
+            )
         return None
 
     def clean(self):
