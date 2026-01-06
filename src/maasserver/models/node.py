@@ -152,6 +152,11 @@ from maasserver.node_status import (
     NODE_TRANSITIONS,
 )
 from maasserver.permissions import NodePermission
+from maasserver.power_policy import (
+    classify_power_error,
+    FailureType,
+    PowerOperationCircuitBreaker,
+)
 from maasserver.routablepairs import (
     get_routable_address_map,
     reduce_routable_address_map,
@@ -233,6 +238,9 @@ from provisioningserver.utils.twisted import asynchronous, callOut, undefined
 
 log = LegacyLogger()
 maaslog = get_maas_logger("node")
+
+# Global circuit breaker for power operations
+_power_circuit_breaker = PowerOperationCircuitBreaker()
 
 
 # Holds the known `bios_boot_methods`. If `bios_boot_method` is not in this
@@ -1073,6 +1081,31 @@ class Node(CleanSave, TimestampedModel):
     # the region processes. Each run periodically to update nodes.
     status_expires = DateTimeField(
         null=True, blank=False, default=None, editable=False
+    )
+
+    # Sub-status fields for detailed phase tracking within main statuses
+    status_phase = CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        default=None,
+        editable=False,
+        help_text="Current phase within the main status",
+    )
+
+    status_phase_message = TextField(
+        blank=True,
+        default="",
+        editable=False,
+        help_text="Human-readable description of current phase",
+    )
+
+    status_phase_updated = DateTimeField(
+        null=True,
+        blank=True,
+        default=None,
+        editable=False,
+        help_text="Timestamp when phase was last updated",
     )
 
     owner = ForeignKey(
@@ -2085,6 +2118,36 @@ class Node(CleanSave, TimestampedModel):
         self.status = status
         return current_status
 
+    def update_status_phase(self, phase, message=None):
+        """Update the sub-status phase.
+
+        :param phase: The phase identifier from COMMISSIONING_PHASE
+        :param message: Optional human-readable message. If not provided,
+                        uses the label from COMMISSIONING_PHASE_LABELS
+        """
+        from maasserver.enum import COMMISSIONING_PHASE_LABELS
+        from maasserver.models.event import Event
+
+        self.status_phase = phase
+        self.status_phase_message = message or COMMISSIONING_PHASE_LABELS.get(
+            phase, phase
+        )
+        self.status_phase_updated = timezone.now()
+        self.save(
+            update_fields=[
+                "status_phase",
+                "status_phase_message",
+                "status_phase_updated",
+            ]
+        )
+
+        # Record event for phase change
+        Event.objects.create_node_event(
+            self,
+            EVENT_TYPES.NODE_STATUS_EVENT,
+            event_description=f"Phase: {self.status_phase_message}",
+        )
+
     def _validate_status_transition(self, old_status, new_status):
         """Check a node's status transition against the node-status FSM."""
         if old_status is None:
@@ -2404,6 +2467,41 @@ class Node(CleanSave, TimestampedModel):
                 "Please configure the power type and try again."
             )
 
+        # Verify BMC accessibility before starting commissioning
+        if self.bmc:
+            try:
+                accessible, inaccessible = self.bmc.probe_bmc_accessibility().wait(30)
+                if not accessible:
+                    bmc_ip = (
+                        self.bmc.ip_address.ip
+                        if self.bmc.ip_address
+                        else "unknown"
+                    )
+                    rack_list = ", ".join(sorted(inaccessible)) if inaccessible else "none checked"
+                    err_msg = (
+                        f"Cannot start commissioning for node {self.hostname}: "
+                        f"BMC at {bmc_ip} is not accessible from any rack controller. "
+                        f"Verified rack controllers: {rack_list}. "
+                        f"Please check network configuration and ensure the BMC IP "
+                        f"is reachable from at least one rack controller."
+                    )
+                    raise PowerProblem(err_msg)
+                maaslog.info(
+                    "%s: BMC accessibility verified. Accessible from %d rack controller(s)",
+                    self.hostname,
+                    len(accessible),
+                )
+            except PowerProblem:
+                # Re-raise PowerProblem as-is
+                raise
+            except Exception as error:
+                # Log other exceptions but continue (don't block commissioning)
+                maaslog.warning(
+                    "%s: BMC accessibility check failed: %s. Continuing with commissioning.",
+                    self.hostname,
+                    str(error),
+                )
+
         self._register_request_event(
             user,
             EVENT_TYPES.REQUEST_NODE_START_COMMISSIONING,
@@ -2412,6 +2510,11 @@ class Node(CleanSave, TimestampedModel):
 
         # Create a status message for COMMISSIONING.
         Event.objects.create_node_event(self, EVENT_TYPES.COMMISSIONING)
+
+        # Update status phase to INITIALIZING
+        from maasserver.enum import COMMISSIONING_PHASE
+
+        self.update_status_phase(COMMISSIONING_PHASE.INITIALIZING)
 
         # Set the commissioning options on the node.
         self.enable_ssh = enable_ssh
@@ -6377,6 +6480,15 @@ class Node(CleanSave, TimestampedModel):
         power_info,
         order=None,
     ):
+        # Check circuit breaker first - if it's open, fail immediately
+        if not _power_circuit_breaker.should_allow(self.id):
+            failure_count = _power_circuit_breaker.get_failure_count(self.id)
+            raise PowerProblem(
+                f"Circuit breaker OPEN for node {self.hostname}. "
+                f"Previous power operations failed {failure_count} times. "
+                f"Please check configuration before retrying."
+            )
+
         # Check if the BMC is accessible. If not we need to do some work to
         # make sure we can determine which rack controller can power
         # control this node.
@@ -6514,6 +6626,41 @@ class Node(CleanSave, TimestampedModel):
 
         # Power control the node.
         defer.addCallback(cb_power_control)
+
+        # Add error handler to record failures in circuit breaker
+        def eb_handle_power_failure(failure):
+            """Handle power operation failures and record in circuit breaker."""
+            failure_type = classify_power_error(failure.value)
+            _power_circuit_breaker.record_failure(self.id, failure_type)
+
+            if failure_type == FailureType.CONFIGURATION:
+                # Configuration errors should fail immediately
+                maaslog.error(
+                    "%s: Configuration error detected, not retrying: %s",
+                    self.hostname,
+                    failure.getErrorMessage(),
+                )
+                Event.objects.create_node_event(
+                    self,
+                    EVENT_TYPES.NODE_POWER_QUERY_FAILED,
+                    event_description=f"Configuration error: {failure.getErrorMessage()}",
+                )
+
+                # Mark node as failed immediately for config errors
+                @transactional
+                def mark_node_failed():
+                    node = Node.objects.get(id=self.id)
+                    if node.status in COMMISSIONING_LIKE_STATUSES:
+                        node.mark_failed(
+                            comment=f"Configuration error: {failure.getErrorMessage()}",
+                            script_result_status=SCRIPT_STATUS.FAILED,
+                        )
+
+                deferToDatabase(mark_node_failed)
+
+            return failure  # Re-raise the failure
+
+        defer.addErrback(eb_handle_power_failure)
         return defer
 
     @classmethod

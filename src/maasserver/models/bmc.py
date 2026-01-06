@@ -662,6 +662,111 @@ class BMC(CleanSave, TimestampedModel):
                 bmc=self, rack_controller=rack, routable=routable
             ).save()
 
+    @asynchronous
+    @inlineCallbacks
+    def probe_bmc_accessibility(self, timeout=10):
+        """Probe all rack controllers to verify BMC accessibility and update
+        routable_rack_relationships.
+
+        This method performs dynamic verification by querying the power state
+        from all connected rack controllers. Rack controllers that can
+        successfully query the BMC are marked as accessible (routable=True),
+        while those that fail are marked as inaccessible (routable=False).
+
+        :param timeout: Timeout in seconds for each rack controller probe
+        :return: A Deferred that resolves to a tuple of
+            (accessible_rack_ids, inaccessible_rack_ids)
+        """
+        from maasserver.clusterrpc.power import PowerQuery
+        from provisioningserver.enum import POWER_STATE
+
+        accessible_racks = set()
+        inaccessible_racks = set()
+
+        # Get power parameters for this BMC
+        power_type = self.power_type
+        power_parameters = self.get_power_parameters()
+
+        if not power_type or power_type == "manual":
+            maaslog.info(
+                "%s: BMC has power type '%s', skipping accessibility probe",
+                self,
+                power_type,
+            )
+            returnValue((accessible_racks, inaccessible_racks))
+
+        from twisted.internet.defer import DeferredList
+
+        clients = getAllClients()
+        if not clients:
+            maaslog.warning(
+                "%s: No rack controllers connected for BMC accessibility probe",
+                self,
+            )
+            returnValue((accessible_racks, inaccessible_racks))
+
+        # Build list of deferreds for parallel execution
+        def make_probe_deferred(client):
+            """Create a deferred that probes BMC from a specific client."""
+            d = client(
+                PowerQuery,
+                system_id="probe-bmc",
+                hostname=f"bmc-{self.id}",
+                power_type=power_type,
+                context=power_parameters,
+            )
+            # Tag the result with client ident for later processing
+            d.addCallback(lambda result: (client.ident, True, result))
+            d.addErrback(lambda failure: (client.ident, False, failure))
+            return d
+
+        # Execute all probes in parallel
+        deferreds = [make_probe_deferred(client) for client in clients]
+        results = yield DeferredList(deferreds, consumeErrors=True)
+
+        # Process results
+        for success, result_data in results:
+            if success:
+                client_ident, probe_success, result = result_data
+                if probe_success:
+                    # Check if the query succeeded
+                    if result.get("state") != POWER_STATE.ERROR:
+                        accessible_racks.add(client_ident)
+                        maaslog.debug(
+                            "%s: Rack controller %s can access BMC",
+                            self,
+                            client_ident,
+                        )
+                    else:
+                        inaccessible_racks.add(client_ident)
+                        maaslog.debug(
+                            "%s: Rack controller %s cannot access BMC (ERROR state)",
+                            self,
+                            client_ident,
+                        )
+                else:
+                    # probe_success=False means errback was called
+                    inaccessible_racks.add(client_ident)
+                    maaslog.debug(
+                        "%s: Rack controller %s failed to access BMC: %s",
+                        self,
+                        client_ident,
+                        str(result),  # result is the failure
+                    )
+
+        # Update routable_rack_relationships with the probe results
+        self.update_routable_racks(accessible_racks, inaccessible_racks)
+
+        maaslog.info(
+            "%s: BMC accessibility probe completed. "
+            "Accessible racks: %d, Inaccessible racks: %d",
+            self,
+            len(accessible_racks),
+            len(inaccessible_racks),
+        )
+
+        returnValue((accessible_racks, inaccessible_racks))
+
 
 class PodManager(BaseBMCManager):
     """Manager for `Pod` not `BMC`'s."""

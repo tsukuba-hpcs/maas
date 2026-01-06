@@ -20,6 +20,8 @@ That said, NEW ENUMS MUST NOT BE ADDED HERE AT ALL! Please add them to maascommo
 __all__ = [
     "CACHE_MODE_TYPE",
     "CACHE_MODE_TYPE_CHOICES",
+    "COMMISSIONING_PHASE",
+    "COMMISSIONING_PHASE_LABELS",
     "COMPONENT",
     "DEVICE_IP_ASSIGNMENT_TYPE",
     "FILESYSTEM_GROUP_TYPE",
@@ -151,6 +153,29 @@ NODE_STATUS_SHORT_LABEL_CHOICES = tuple(
 )
 
 NODE_STATUS_CHOICES_DICT = OrderedDict(NODE_STATUS_CHOICES)
+
+
+class COMMISSIONING_PHASE:
+    """Commissioning internal phases."""
+
+    INITIALIZING = "initializing"
+    POWERING_ON = "powering_on"
+    WAITING_PXE = "waiting_pxe"
+    LOADING_EPHEMERAL = "loading_ephemeral"
+    RUNNING_SCRIPTS = "running_scripts"
+    COLLECTING_DATA = "collecting_data"
+    FINALIZING = "finalizing"
+
+
+COMMISSIONING_PHASE_LABELS = {
+    COMMISSIONING_PHASE.INITIALIZING: "初期化中",
+    COMMISSIONING_PHASE.POWERING_ON: "電源投入待ち",
+    COMMISSIONING_PHASE.WAITING_PXE: "PXEブート待ち",
+    COMMISSIONING_PHASE.LOADING_EPHEMERAL: "エフェメラル環境ロード中",
+    COMMISSIONING_PHASE.RUNNING_SCRIPTS: "スクリプト実行中",
+    COMMISSIONING_PHASE.COLLECTING_DATA: "データ収集中",
+    COMMISSIONING_PHASE.FINALIZING: "最終処理中",
+}
 
 
 # NODE_STATUS when the node is owned by an owner and it is not commissioning.
