@@ -51,6 +51,7 @@ PROXY_CONNECT = False
 # the development regiond will enable query logging, the unit tests will have
 # it disabled.
 DEBUG = True
+USE_JSON_LOGGING = False
 DEBUG_QUERIES = os.environ.get("MAAS_DEBUG_QUERIES", "0") == "1"
 DEBUG_QUERIES_LOG_ALL = (
     os.environ.get("MAAS_DEBUG_QUERIES_LOG_ALL", "0") == "1"

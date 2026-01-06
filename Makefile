@@ -387,8 +387,8 @@ $(packaging-build-area):
 -packaging-export-tree:
 ifeq ($(packaging-export-uncommitted),true)
 	git ls-files --others --exclude-standard --cached | grep -v '^debian' | \
-		xargs tar --transform 's,^,$(packaging-dir)/,' \
-			-cf $(packaging-build-area)/$(packaging-orig-tar)
+		tar --transform 's,^,$(packaging-dir)/,' \
+			-cf $(packaging-build-area)/$(packaging-orig-tar) -T -
 else
 	git archive --format=tar $(packaging-export-extra) \
 		--prefix=$(packaging-dir)/ \
