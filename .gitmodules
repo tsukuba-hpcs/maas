@@ -1,4 +1,4 @@
 [submodule "src/maasui/src"]
 	path = src/maasui/src
-	url = https://github.com/canonical/maas-ui
+	url = git@github.com:tsukuba-hpcs/maas-ui.git
 	branch = main
