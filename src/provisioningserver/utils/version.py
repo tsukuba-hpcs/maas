@@ -11,6 +11,7 @@ from typing import Optional, Self
 
 from packaging.version import Version
 
+from provisioningserver.enum import CONTROLLER_INSTALL_TYPE
 from provisioningserver.utils import deb, shell, snap
 
 DISTRIBUTION = distribution("maas")
@@ -143,11 +144,28 @@ def get_running_version() -> MAASVersion:
     return maas_version
 
 
+@dataclasses.dataclass
+class DevVersionsInfo:
+    """Version information for development environment."""
+
+    install_type = CONTROLLER_INSTALL_TYPE.UNKNOWN
+
+    version: str
+
+    @property
+    def current(self):
+        """Return a simple object with version attribute for compatibility."""
+        return self
+
+
 def get_versions_info():
     """Get a versions info object based on the install type."""
     versions_info = snap.get_snap_versions_info()
     if not versions_info:
         versions_info = deb.get_deb_versions_info()
+    if not versions_info:
+        # Fallback for development environment
+        versions_info = DevVersionsInfo(version=_get_version_from_python_package())
     return versions_info
 
 
