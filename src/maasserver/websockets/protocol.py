@@ -5,6 +5,7 @@
 
 from collections import deque
 from contextlib import ExitStack
+from datetime import datetime
 from functools import partial
 from http.cookies import SimpleCookie
 import ipaddress
@@ -311,12 +312,15 @@ class WebSocketProtocol(Protocol):
 
         This method ensures seamless encoding of:
         - Byte strings (`bytes`): Decoded into UTF-8 strings with error handling.
+        - Datetime objects (`datetime`): Formatted as human-readable strings.
         - IP addresses (`ipaddress.IPv4Address` and `ipaddress.IPv6Address`): Converted to their string representation.
 
         If the object type is unsupported, a `TypeError` is raised.
         """
         if isinstance(obj, bytes):
             return obj.decode(encoding="utf-8", errors="ignore")
+        elif isinstance(obj, datetime):
+            return obj.strftime("%a, %d %b. %Y %H:%M:%S")
         elif isinstance(
             obj,
             (

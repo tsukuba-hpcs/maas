@@ -412,6 +412,10 @@ class NodeHandler(TimestampedModelHandler):
                     )
                 )
 
+            # Convert status_phase_updated to ISO format for JSON serialization
+            if hasattr(obj, "status_phase_updated") and obj.status_phase_updated is not None:
+                data["status_phase_updated"] = dehydrate_datetime(obj.status_phase_updated)
+
         # Filters are only available on machines and devices.
         if not obj.is_controller:
             # For filters
