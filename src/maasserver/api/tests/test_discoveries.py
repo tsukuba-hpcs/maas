@@ -296,6 +296,74 @@ class TestDiscoveriesScanAPI(APITestCase.ForUser):
         response = self.client.post(uri, {"op": "clear", "neighbours": "true"})
         self.assertEqual(204, response.status_code, response.content)
 
+    def test_clear_neighbours_also_deletes_discovered_ips(self):
+        """Test that clearing neighbours also deletes DISCOVERED IP addresses."""
+        from maasserver.enum import IPADDRESS_TYPE
+        from maasserver.models import StaticIPAddress
+
+        self.become_admin()
+        rack = factory.make_RackController()
+        iface = rack.current_config.interface_set.first()
+        subnet = factory.make_Subnet()
+
+        # Create discoveries with DISCOVERED IP addresses
+        for _ in range(3):
+            discovery = factory.make_Discovery(interface=iface)
+            # Create a corresponding DISCOVERED StaticIPAddress
+            factory.make_StaticIPAddress(
+                alloc_type=IPADDRESS_TYPE.DISCOVERED,
+                ip=discovery.ip,
+                subnet=subnet,
+            )
+
+        # Verify DISCOVERED IPs exist
+        discovered_count = StaticIPAddress.objects.filter(
+            alloc_type=IPADDRESS_TYPE.DISCOVERED
+        ).count()
+        self.assertGreaterEqual(discovered_count, 3)
+
+        # Clear neighbours
+        uri = get_discoveries_uri()
+        response = self.client.post(uri, {"op": "clear", "neighbours": "true"})
+        self.assertEqual(204, response.status_code, response.content)
+
+        # Verify DISCOVERED IPs are deleted
+        discovered_count = StaticIPAddress.objects.filter(
+            alloc_type=IPADDRESS_TYPE.DISCOVERED
+        ).count()
+        self.assertEqual(0, discovered_count)
+
+    def test_clear_all_deletes_discovered_ips(self):
+        """Test that clearing all also deletes DISCOVERED IP addresses."""
+        from maasserver.enum import IPADDRESS_TYPE
+        from maasserver.models import StaticIPAddress
+
+        self.become_admin()
+        rack = factory.make_RackController()
+        iface = rack.current_config.interface_set.first()
+        subnet = factory.make_Subnet()
+
+        # Create discoveries with DISCOVERED IP addresses
+        make_discoveries(interface=iface, count=3)
+        for _ in range(2):
+            ip = factory.make_ip_address()
+            factory.make_StaticIPAddress(
+                alloc_type=IPADDRESS_TYPE.DISCOVERED,
+                ip=ip,
+                subnet=subnet,
+            )
+
+        # Clear all
+        uri = get_discoveries_uri()
+        response = self.client.post(uri, {"op": "clear", "all": "true"})
+        self.assertEqual(204, response.status_code, response.content)
+
+        # Verify DISCOVERED IPs are deleted
+        discovered_count = StaticIPAddress.objects.filter(
+            alloc_type=IPADDRESS_TYPE.DISCOVERED
+        ).count()
+        self.assertEqual(0, discovered_count)
+
 
 class TestDiscoveriesClearByMACandIP(APITestCase.ForUser):
     def test_clear_by_mac_and_ip_not_allowed_for_non_admin(self):
@@ -352,6 +420,52 @@ class TestDiscoveriesClearByMACandIP(APITestCase.ForUser):
             },
         )
         self.assertEqual(410, response.status_code, response.content)
+
+    def test_clear_by_mac_and_ip_also_deletes_discovered_ip(self):
+        """Test that clearing by MAC and IP also deletes DISCOVERED IP address."""
+        from maasserver.enum import IPADDRESS_TYPE
+        from maasserver.models import StaticIPAddress
+
+        self.become_admin()
+        rack = factory.make_RackController()
+        iface = rack.current_config.interface_set.first()
+        subnet = factory.make_Subnet()
+
+        # Create a discovery with DISCOVERED IP address
+        neigh = factory.make_Discovery(interface=iface)
+        factory.make_StaticIPAddress(
+            alloc_type=IPADDRESS_TYPE.DISCOVERED,
+            ip=neigh.ip,
+            subnet=subnet,
+        )
+
+        # Verify DISCOVERED IP exists
+        self.assertTrue(
+            StaticIPAddress.objects.filter(
+                ip=neigh.ip,
+                alloc_type=IPADDRESS_TYPE.DISCOVERED
+            ).exists()
+        )
+
+        # Clear by MAC and IP
+        uri = get_discoveries_uri()
+        response = self.client.post(
+            uri,
+            {
+                "op": "clear_by_mac_and_ip",
+                "ip": neigh.ip,
+                "mac": neigh.mac_address,
+            },
+        )
+        self.assertEqual(204, response.status_code, response.content)
+
+        # Verify DISCOVERED IP is deleted
+        self.assertFalse(
+            StaticIPAddress.objects.filter(
+                ip=neigh.ip,
+                alloc_type=IPADDRESS_TYPE.DISCOVERED
+            ).exists()
+        )
 
 
 class TestDiscoveryAPI(APITestCase.ForUser):

@@ -118,20 +118,38 @@ class DiscoveryManager(Manager, DiscoveryQueriesMixin):
         :param neighbours: Deletes neighbour entries.
         """
         # Circular imports.
-        from maasserver.models import MDNS, Neighbour
+        from maasserver.models import MDNS, Neighbour, StaticIPAddress
+        from maasserver.enum import IPADDRESS_TYPE
 
         if True not in (all, mdns, neighbours):
             return
+
+        deleted_items = []
+
         if mdns or all:
+            mdns_count = MDNS.objects.count()
             MDNS.objects.all().delete()
-            what = "mDNS"
+            deleted_items.append(f"{mdns_count} mDNS entries")
+
         if neighbours or all:
+            neighbour_count = Neighbour.objects.count()
             Neighbour.objects.all().delete()
-            what = "neighbour"
-        if all:
-            what = "mDNS and neighbour"
+            deleted_items.append(f"{neighbour_count} neighbour entries")
+
+            # Delete DISCOVERED StaticIPAddress entries as well
+            # These are created when neighbours/leases are observed
+            discovered_count = StaticIPAddress.objects.filter(
+                alloc_type=IPADDRESS_TYPE.DISCOVERED
+            ).count()
+            StaticIPAddress.objects.filter(
+                alloc_type=IPADDRESS_TYPE.DISCOVERED
+            ).delete()
+            deleted_items.append(f"{discovered_count} discovered IP addresses")
+
+        what = " and ".join(deleted_items) if deleted_items else "no data"
+
         maaslog.info(
-            "%s all %s entries."
+            "%s %s."
             % (
                 (
                     "Cleared"
@@ -143,14 +161,28 @@ class DiscoveryManager(Manager, DiscoveryQueriesMixin):
         )
 
     def delete_by_mac_and_ip(self, ip, mac, user=None):
+        """Delete neighbour entry and related discovery data by MAC and IP.
+
+        :param ip: IP address to delete
+        :param mac: MAC address to delete
+        :param user: Optional user performing the deletion
+        """
         # Circular imports.
-        from maasserver.models import MDNS, Neighbour, RDNS
+        from maasserver.models import MDNS, Neighbour, RDNS, StaticIPAddress
+        from maasserver.enum import IPADDRESS_TYPE
 
         delete_result = Neighbour.objects.filter(
             ip=ip, mac_address=mac
         ).delete()
         MDNS.objects.filter(ip=ip).delete()
         RDNS.objects.filter(ip=ip).delete()
+
+        # Also delete DISCOVERED StaticIPAddress for this IP
+        StaticIPAddress.objects.filter(
+            ip=ip,
+            alloc_type=IPADDRESS_TYPE.DISCOVERED
+        ).delete()
+
         if delete_result[0] >= 1:
             maaslog.info(
                 "%s%s."
@@ -160,7 +192,7 @@ class DiscoveryManager(Manager, DiscoveryQueriesMixin):
                         if user is None
                         else "User '%s' cleared" % (user.username)
                     ),
-                    f" neighbour entry: {ip} ({mac})",
+                    f" neighbour entry and discovered IP: {ip} ({mac})",
                 )
             )
         return delete_result

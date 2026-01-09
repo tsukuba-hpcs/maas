@@ -120,8 +120,12 @@ def _cleanup_expired_discovered_ip_addresses() -> None:
     """
     This startup cleanup is needed for the following reasons:
     - Major cleanup for https://bugs.launchpad.net/maas/+bug/2049508
-    - In case we missed some DHCP notifications related to discovered IP addresses, we clean up all the resources here.
+    - In case we missed some DHCP notifications related to discovered IP addresses,
+      we clean up all the resources here.
+    - Cleanup orphaned DISCOVERED StaticIPAddress entries that have no corresponding
+      Neighbour or active lease.
     """
+    from maasserver.models import Neighbour, StaticIPAddress
 
     # Delete all the dummy interfaces and IP addresses that have expired.
     # The related DNS records will be deleted when the django post_delete signal is handled.
@@ -130,6 +134,37 @@ def _cleanup_expired_discovered_ip_addresses() -> None:
         ip_addresses__ip__isnull=True,
         ip_addresses__alloc_type=IPADDRESS_TYPE.DISCOVERED,
     ).delete()
+
+    # Delete orphaned DISCOVERED IP addresses that have no corresponding Neighbour entry
+    # Get all IPs from DISCOVERED StaticIPAddress entries
+    discovered_ips = list(
+        StaticIPAddress.objects.filter(
+            alloc_type=IPADDRESS_TYPE.DISCOVERED,
+            ip__isnull=False
+        ).values_list('ip', flat=True).distinct()
+    )
+
+    if discovered_ips:
+        # Get all IPs from Neighbour entries
+        neighbour_ips = set(
+            Neighbour.objects.filter(
+                ip__isnull=False
+            ).values_list('ip', flat=True).distinct()
+        )
+
+        # Find orphaned IPs (in StaticIPAddress but not in Neighbour)
+        orphaned_ips = [ip for ip in discovered_ips if ip not in neighbour_ips]
+
+        if orphaned_ips:
+            from provisioningserver.logger import get_maas_logger
+            maaslog = get_maas_logger("start_up")
+            deleted_count = StaticIPAddress.objects.filter(
+                alloc_type=IPADDRESS_TYPE.DISCOVERED,
+                ip__in=orphaned_ips
+            ).delete()[0]
+            maaslog.info(
+                f"Startup cleanup: Deleted {deleted_count} orphaned DISCOVERED IP addresses"
+            )
 
 
 def _get_certificate_from_database(
